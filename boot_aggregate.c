@@ -20,17 +20,23 @@
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 #include <stdint.h>
-#define MAX_EVENT_SIZE 200000
-#define EVENT_HEADER_SIZE 32
-#define MAX_EVENT_DATA_SIZE (MAX_EVENT_SIZE - EVENT_HEADER_SIZE)
-#define NUM_PCRS 8		/*  PCR registers 0-7 in boot aggregate */
+#include <stdio.h>
+
 //char *TCID = "ima_boot_aggregate";
 int32_t TST_TOTAL = 1;
 static void displayDigest(uint8_t *pcr, int32_t n)
 {
 	int32_t i;
 	for (i = 0; i < n; i++)
-		printf("%x ", pcr[i] );
+		printf("%x", pcr[i] );
+	printf("\n");
+}
+
+static void displayN(uint8_t *pcr, int32_t n)
+{
+	int32_t i;
+	for (i = 0; i < n; i++)
+		printf("%c ", pcr[i] );
 	printf("\n");
 }
 
@@ -40,20 +46,15 @@ TPMVERSION determineTPMVersion() {
 	return TPMVERSION2;
 }
 
-#define TPM2_SHA1_ID 0x0004
-#define TPM2_SHA256_ID 0x000B
-#define TPM2_SHA386_ID 0x000C
-#define TPM2_SHA512_ID 0x000D
-#define TPM2_SM3_256 0x0012 // research
-
 uint32_t getHashLength(uint16_t algoId) {
 	switch (algoId) {
-		case TPM2_SHA1_ID: return SHA_DIGEST_LENGTH;
-		case TPM2_SHA256_ID: return SHA256_DIGEST_LENGTH;
-		case TPM2_SHA386_ID: return SHA384_DIGEST_LENGTH;
-		case TPM2_SHA512_ID: return SHA512_DIGEST_LENGTH;
-		case TPM2_SM3_256: return 0; // ?????? 
+		case TPM2_SHA1_ID: return SHA_DIGEST_LENGTH;break;
+		case TPM2_SHA256_ID: return SHA256_DIGEST_LENGTH;break;
+		case TPM2_SHA386_ID: return SHA384_DIGEST_LENGTH;break;
+		case TPM2_SHA512_ID: return SHA512_DIGEST_LENGTH;break;
+		case TPM2_SM3_256: return 0;break; // ?????? 
 	}
+	return 0;
 }
 
 EVP_MD_CTX* initEVPContext(HASHTYPE hashType){
@@ -84,72 +85,122 @@ static int32_t checkSpecId(FILE * fp,SPEC_ID_EVENT* spec) {
 	printf("event Size: %d\n",t);
 	fread(eventData,t,1,fp);
 	displayDigest(eventData,t);	
-	printf("%s\n",eventData);
+	//printf("%s\n",eventData);
 	return 1;
 }
 
-static void readTpm2BiosLog(FILE * fp) {
+static void readTpm2BiosLog(FILE * fp,TCG_PCR_EVENT2** eventListRef,uint32_t* eventCount) {
 	SPEC_ID_EVENT event;
+	
+	fseek(fp,0,SEEK_END);
+	uint32_t be = ftell(fp);
+	fseek(fp,0,SEEK_SET);
+	
 	int32_t ret = checkSpecId(fp,&event);
-	int eventCount = 0;
-
+	uint32_t evListSize = sizeof(TCG_PCR_EVENT2) * 100;
+	(*eventListRef) = malloc(evListSize); 
+	TCG_PCR_EVENT2* eventList = (*eventListRef);
 	while(!feof(fp)){
+		if((*eventCount) >= evListSize){
+			evListSize = evListSize*2;
+			eventList = realloc(eventList,evListSize);
+			printf("needed to realloc %u bytes",evListSize);
+		}
+		TCG_PCR_EVENT2* e = &eventList[(*eventCount)];
+		fread(&e->pcrIndex,4,1,fp);
+		fread(&e->eventType,4,1,fp);
+		fread(&e->digests.count,4,1,fp);
+		if(feof(fp)){
+			break;		
+		}
+		e->digests.digestList = (TCG_PCR_EVENT_DIGEST2* )malloc( sizeof(TCG_PCR_EVENT_DIGEST2) * (e->digests.count) );
 		
-		TCG_PCR_EVENT2 e;
-		fread(&e.pcrIndex,4,1,fp);
-		fread(&e.eventType,4,1,fp);
-		fread(&e.digests.count,4,1,fp);
-		
-		printf("pcr: %d \neventType: %d\ncount: %d\n",e.pcrIndex,e.eventType,e.digests.count);
-		e.digests.digestList = (TCG_PCR_EVENT_DIGEST2* )malloc( sizeof(TCG_PCR_EVENT_DIGEST2) * (e.digests.count) );
-		
-		for(int i = 0; i < e.digests.count;i++){
-			fread(&e.digests.digestList[i].algorithmId,2,1,fp);
-			printf("%d\n",e.digests.digestList[i].algorithmId);
-			uint32_t len = getHashLength(e.digests.digestList[i].algorithmId);
-			printf("%d\n",len);			
-			fread(e.digests.digestList[i].digest,len,1,fp);
+		for(int i = 0; i < e->digests.count;i++){
+			fread(&e->digests.digestList[i].algorithmId,2,1,fp);
+			uint32_t len = getHashLength(e->digests.digestList[i].algorithmId);
+			fread(e->digests.digestList[i].digest,len,1,fp);
 		}
 
-		fread(&e.eventSize,4,1,fp);
-		printf("eventSize: %d\n",e.eventSize);
-
-		e.eventData = malloc(e.eventSize);
-		fread(e.eventData,e.eventSize,1,fp);
-
-		//displayDigest(e.eventData, e.eventSize);
-
-		free(e.digests.digestList);
-		free(e.eventData);
-		eventCount++;
+		fread(&e->eventSize,4,1,fp);
+		e->eventData = malloc(e->eventSize);
+		fread(e->eventData,e->eventSize,1,fp);	
+		#ifdef DEBUG
+			printf("pcr: %d \neventType: %d\ncount: %d\n",e->pcrIndex,e->eventType,e->digests.count);
+			printf("eventSize: %d\n",e->eventSize);
+			displayN(e->eventData,e->eventSize); // useful if no NUL at end of "string" which is often the case sadly
+			printf("eventCount %d\n",(*eventCount));
+		#endif
+		(*eventCount)++;
 	}
-	printf("eventCount %d\n",eventCount);
+}
+
+void printAllEvents(TCG_PCR_EVENT2* eventList,uint32_t eventCount) {
+	for(int i= 0; i < eventCount;i++){
+		TCG_PCR_EVENT2* e = &eventList[i];
+		printf("%u %u %u\n",e->pcrIndex,e->eventType,e->eventSize);
+	}
+}
+
+void freeEventLog(TCG_PCR_EVENT2* eventList, uint32_t eventCount) {
+	for( uint32_t i = 0; i < eventCount; i++ ) {
+		free( eventList[i].eventData );
+		free( eventList[i].digests.digestList );
+	}
+	free(eventList);
 }
 
 
-
 static void verifyBootAggregate(const char * str) {
-	struct { 
-		struct {
-			uint32_t pcr;
-			int32_t type;
-			uint8_t digest[SHA256_DIGEST_LENGTH];
-			uint32_t len;
-		} header;
-		uint8_t data[MAX_EVENT_DATA_SIZE];
-	} event;
-	struct {
-		uint8_t digest[SHA256_DIGEST_LENGTH];
-	} pcr[NUM_PCRS]; // PCR 0-7
-	
 	uint8_t bootAggregate[EVP_MAX_MD_SIZE];
+	uint8_t digests[NUM_PCRS][EVP_MAX_MD_SIZE];
+	TCG_PCR_EVENT2* eventList=NULL;
+	uint32_t eventCount=0;
 	FILE * fp = fopen(str,"rb");
-	int32_t i = 0;
-
-	for (;i < NUM_PCRS; i++) memset(&pcr[i].digest, 0, SHA256_DIGEST_LENGTH);
+	uint32_t i = 0;
+	for (;i < NUM_PCRS; i++) memset(digests[i], 0, EVP_MAX_MD_SIZE);
+	i = 0;
 	uint32_t outLen = 0;
-	readTpm2BiosLog(fp);
+	
+	readTpm2BiosLog(fp,&eventList,&eventCount);
+	if(eventList == NULL){
+		printf("EventList was NUll \n");
+	}
+	printf("read success\n");
+
+	for(i=0;i < eventCount; i++ ) {
+		TCG_PCR_EVENT2* eref = &eventList[i];
+		EVP_MD_CTX* mdctx = initEVPContext(TPM_SHA256);		
+		#ifdef DEBUG 
+			printf("i: %d current Pcr [%d]:",i,eref->pcrIndex);
+			displayDigest(digests[eref->pcrIndex],SHA256_DIGEST_LENGTH);
+		#endif
+		EVP_DigestUpdate(mdctx,digests[eref->pcrIndex] ,SHA256_DIGEST_LENGTH);
+		EVP_DigestUpdate(mdctx,eref->digests.digestList->digest,SHA256_DIGEST_LENGTH);
+		EVP_DigestFinal_ex(mdctx, digests[eref->pcrIndex], &outLen);
+		EVP_MD_CTX_free(mdctx); // probably can be optimised away 
+	}
+	
+	memset(&bootAggregate, 0, SHA256_DIGEST_LENGTH);
+	EVP_MD_CTX* mdctx = initEVPContext(TPM_SHA256);	
+	
+	#ifdef DEBUG
+		printf("\n Final State of virtual Pcrs: \n");
+	#endif
+
+	for (i = 0; i < NUM_PCRS; i++) {
+		#ifdef DEBUG
+			printf("current Pcr [%d]:",i);
+			displayDigest(digests[i],SHA256_DIGEST_LENGTH);
+		#endif
+		EVP_DigestUpdate(mdctx,digests[i], SHA256_DIGEST_LENGTH);
+	}
+	
+	EVP_DigestFinal_ex(mdctx,bootAggregate,&outLen);
+	EVP_MD_CTX_free(mdctx); // probably can be optimised away 
+	printf("boot_aggregate:");
+	displayDigest(bootAggregate,outLen);
 	fclose(fp);
+	freeEventLog(eventList,eventCount);
 	return;
 /*
 	while( fread(&event, sizeof(event.header), 1, fp) ){		

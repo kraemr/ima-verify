@@ -16,6 +16,20 @@
 	//#include <openssl/sha.h> // DEPRECATED
 	#include <openssl/evp.h>
 #endif
+
+#define TPM2_SHA1_ID 0x0004
+#define TPM2_SHA256_ID 0x000B
+#define TPM2_SHA386_ID 0x000C
+#define TPM2_SHA512_ID 0x000D
+#define TPM2_SM3_256 0x0012 // research
+
+#define MAX_EVENT_SIZE 200000
+#define EVENT_HEADER_SIZE 32
+#define MAX_EVENT_DATA_SIZE (MAX_EVENT_SIZE - EVENT_HEADER_SIZE)
+#define NUM_PCRS 8		/*  PCR registers 0-7 in boot aggregate */
+
+
+
 typedef enum TPMVERSION {
 	TPMVERSION1,
 	TPMVERSION1_2,
