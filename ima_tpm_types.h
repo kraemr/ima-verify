@@ -26,9 +26,6 @@
 #define MAX_EVENT_SIZE 200000
 #define EVENT_HEADER_SIZE 32
 #define MAX_EVENT_DATA_SIZE (MAX_EVENT_SIZE - EVENT_HEADER_SIZE)
-#define NUM_PCRS 8		/*  PCR registers 0-7 in boot aggregate */
-
-
 
 typedef enum TPMVERSION {
 	TPMVERSION1,
