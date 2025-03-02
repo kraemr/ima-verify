@@ -175,8 +175,10 @@ static uint32_t parseIMALog(char* path,uint16_t hashType, IMA_ENTRY* imaEntryLis
 		memcpy(temp->HASH,&buffer[offset+8],temp->HASH_LEN-8);
 		offset += temp->HASH_LEN;
 
-		printf("%d: ",ima_i);
-		displayDigest(temp->HASH, SHA256_DIGEST_LENGTH);
+		/*
+			printf("%d: ",ima_i);
+			displayDigest(temp->HASH, SHA256_DIGEST_LENGTH);
+		*/
 		temp->TEMPLATE_FILENAME_LEN = castByteBufUint32((uint8_t*)&buffer[offset]);
 		offset += 4;
 		temp->TEMPLATE_FILENAME = (char*)malloc(temp->TEMPLATE_FILENAME_LEN * sizeof(char) );
@@ -215,6 +217,11 @@ void tpmEmulatedExtend(uint8_t* hash1,uint8_t* hash2,uint16_t hashType,uint8_t* 
 
 
 
+void stepIMALog(int32_t imaIndex, uint8_t* lastPcr,uint8_t* currentPcr){	
+
+}
+
+
 // SHOULD BE DONE ITERATIVELY TO AVOID PERFORMANCE DEGRADATION
 // JUST FOR TESTING !!!!!!
 // at some point DIGEST_TO_MATCH and currentHash should be Equal if NOT then no valid
@@ -229,15 +236,11 @@ void replayIMALog(IMA_ENTRY* imaEntries,uint32_t n,uint8_t* DIGEST_TO_MATCH){
 	uint32_t currentPos = 0;
 
 	for( uint32_t i = 1; i < n; i++ ) {
-		memcpy(currentHash,result,32);
 		tpmEmulatedExtend(currentHash, imaEntries[i].HASH,TPM2_SHA256_ID,result);
+		memcpy(currentHash,result,32);
 		printf("%d %s:  ",i,imaEntries[i].TEMPLATE_FILENAME);
 		displayDigest(result,32);
 
-		if( memcmp() ){
-
-		}
-		
 
 		//uint32_t t;
 		//compute_sha256(currentHash,32,result,&t);
@@ -245,8 +248,43 @@ void replayIMALog(IMA_ENTRY* imaEntries,uint32_t n,uint8_t* DIGEST_TO_MATCH){
 	}
 }
 
-/**
-There is actually a file with measurements count, which can be used*/
+/* 
+	There is actually a file with measurements count, which can be used 
+*/
+void test(IMA_ENTRY* imaEntries, int32_t count) {
+	uint8_t zeroes[SHA256_DIGEST_LENGTH] = {0};
+	uint32_t output_length = 0;
+	uint8_t out[SHA256_DIGEST_LENGTH];
+
+	uint8_t pcrs[24][EVP_MAX_MD_SIZE];
+	//displayDigest(pcrs[10],EVP_MAX_MD_SIZE);
+	memcpy(pcrs[imaEntries->PCR_INDEX],zeroes,SHA256_DIGEST_LENGTH);
+	//displayDigest(pcrs[10],EVP_MAX_MD_SIZE);
+
+	for(uint32_t i=0;i < count -1; i++ ) {
+		IMA_ENTRY* eref = &imaEntries[i];
+		EVP_MD_CTX* mdctx = initEVPContext(TPM_SHA256);		
+		#ifdef DEBUG 
+			printf("i: %d current Pcr [%d]:",i,eref->pcrIndex);
+			displayDigest(digests[eref->pcrIndex],SHA256_DIGEST_LENGTH);
+		#endif
+		printf("old: ");
+		displayDigest(pcrs[eref->PCR_INDEX], SHA256_DIGEST_LENGTH);
+		
+		EVP_DigestUpdate(mdctx,pcrs[eref->PCR_INDEX] ,SHA256_DIGEST_LENGTH);
+		
+		printf("new: ");
+		displayDigest(eref->HASH, SHA256_DIGEST_LENGTH);
+		
+		EVP_DigestUpdate(mdctx,eref->HASH,SHA256_DIGEST_LENGTH);
+		EVP_DigestFinal_ex(mdctx, pcrs[eref->PCR_INDEX], &output_length);
+		 
+		printf("digest: ");
+		displayDigest(pcrs[eref->PCR_INDEX], SHA256_DIGEST_LENGTH);
+		printf("\n\n");
+		EVP_MD_CTX_free(mdctx); // probably can be optimised away 
+	}
+}
 
 // We dont now the number of entries beforehand
 // One approach: Read entire File and check for Entry count
@@ -258,7 +296,9 @@ int main(int argc,char* argv[]) {
 	printf("IMA ENTRIES COUNT: %u\n",count);
 	IMA_ENTRY* imaEntries = (IMA_ENTRY*)malloc(count * sizeof(struct IMA_ENTRY));
 	uint32_t len = parseIMALog(path,TPM2_SHA256_ID,imaEntries);
-	replayIMALog(imaEntries,count,NULL);
+	test(imaEntries,count);
+
+	//replayIMALog(imaEntries,count,NULL);
 	freeIMAEntries(imaEntries,len);
 	free(imaEntries);	
 }
