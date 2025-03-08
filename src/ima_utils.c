@@ -49,6 +49,7 @@ EVP_MD_CTX* initEVPContext(uint16_t hashType) {
 	if(mdctx == NULL) {
 		return NULL;
 	}
+//	printf(" initEVPContext for HashType: %u\n",hashType);
 	int32_t initializationResult = 0;
 	switch (hashType){
 		case TPM2_SHA1_ID:   initializationResult = EVP_DigestInit_ex(mdctx, EVP_sha1(),   NULL); break;
@@ -76,7 +77,7 @@ void printAllIMAEntries(IMA_ENTRY* imaEntries,int n) {
 		//printf("Lengths pcr: %u tdl: %u tnl: %u tfl: %u\n",temp->PCR_INDEX,temp->TEMPLATE_DATA_LEN,temp->TEMPLATE_NAME_LEN,temp->TEMPLATE_FILENAME_LEN);
 		displayDigest(temp->TEMPLATE_HASH,SHA256_DIGEST_LENGTH);
 		displayDigest(temp->HASH,temp->HASH_LEN-8);
-		printf("%s\n\n",temp->TEMPLATE_FILENAME);
+	//	printf("%s\n\n",temp->TEMPLATE_FILENAME);
 	}
 }
 
@@ -99,7 +100,7 @@ uint16_t getHashAlgoFromTemplate(IMA_ENTRY* entry) {
 	if(entry == NULL) {
 		return 0;
 	}
-	printf(" %d   ", memcmp(entry->TEMPLATE_DATA,IMA_TEMPLATE_SHA256,8));
+	//printf(" %d   ", memcmp(entry->TEMPLATE_DATA,IMA_TEMPLATE_SHA256,8));
 	uint8_t isSha1 = memcmp(entry->TEMPLATE_DATA,IMA_TEMPLATE_SHA1,6);
 	uint8_t isSha256 = memcmp(entry->TEMPLATE_DATA,IMA_TEMPLATE_SHA256,8);
 	uint8_t isSha384 = memcmp(entry->TEMPLATE_DATA,IMA_TEMPLATE_SHA384,8);
