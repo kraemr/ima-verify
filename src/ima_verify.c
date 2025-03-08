@@ -185,31 +185,6 @@ void tpmEmulatedExtend(uint8_t* hash1,uint8_t* hash2,uint16_t hashAlgoId,uint8_t
 	displayDigest(out,outputLen);
 }
 
-// SHOULD BE DONE ITERATIVELY TO AVOID PERFORMANCE DEGRADATION
-// JUST FOR TESTING !!!!!!
-// at some point DIGEST_TO_MATCH and currentHash should be Equal if NOT then no valid
-void replayIMALog(IMA_ENTRY* imaEntries,uint32_t n,uint8_t* DIGEST_TO_MATCH){
-	uint8_t* currentHash = malloc(EVP_MAX_MD_SIZE);
-	uint8_t* result = malloc(EVP_MAX_MD_SIZE);
-	
-	memcpy(currentHash,imaEntries[0].HASH,32);
-	memcpy(result,imaEntries[0].HASH,32);
-	printf("boot_aggregate: ");
-	displayDigest(currentHash,32);
-	uint32_t currentPos = 0;
-
-	for( uint32_t i = 1; i < n; i++ ) {
-		tpmEmulatedExtend(currentHash, imaEntries[i].HASH,TPM2_SHA256_ID,result);
-		memcpy(currentHash,result,32);
-		printf("%d %s:  ",i,imaEntries[i].TEMPLATE_FILENAME);
-		displayDigest(result,32);
-
-
-		//uint32_t t;
-		//compute_sha256(currentHash,32,result,&t);
-		//displayDigest(result,32);
-	}
-}
 
 /* 
 	There is actually a file with measurements count, which can be used 
@@ -219,29 +194,32 @@ static void test(IMA_ENTRY* imaEntries, int32_t count) {
 	uint32_t output_length = 0;
 	uint8_t out[EVP_MAX_MD_SIZE];
 	uint8_t pcrs[24][EVP_MAX_MD_SIZE];
-	memcpy(pcrs[imaEntries->PCR_INDEX],zeroes,SHA256_DIGEST_LENGTH);
-
+	uint16_t hashAlgo = getHashAlgoFromTemplate(&imaEntries[0]); 
+	uint32_t hashLen = getTpmHashLength(hashAlgo);
+	memcpy(pcrs[imaEntries->PCR_INDEX],zeroes,hashLen);
+	
 	for(uint32_t i=0;i < count -1; i++ ) {
 		IMA_ENTRY* eref = &imaEntries[i];
-		EVP_MD_CTX* mdctx = initEVPContext(TPM2_SHA256_ID);		
+		EVP_MD_CTX* mdctx = initEVPContext(hashAlgo);		
 		#ifdef DEBUG 
 			printf("i: %d current Pcr [%d]:",i,eref->pcrIndex);
 			displayDigest(digests[eref->pcrIndex],SHA256_DIGEST_LENGTH);
 		#endif
 		printf("old: ");
-		displayDigest(pcrs[eref->PCR_INDEX], SHA256_DIGEST_LENGTH);
+		displayDigest(pcrs[eref->PCR_INDEX], hashLen);
 		
-		EVP_DigestUpdate(mdctx,pcrs[eref->PCR_INDEX] ,SHA256_DIGEST_LENGTH);
+		EVP_DigestUpdate(mdctx,pcrs[eref->PCR_INDEX] ,hashLen);
 		
-		printf("new: ");
-		displayDigest(eref->HASH, SHA256_DIGEST_LENGTH);
+		//printf("new: ");
+		displayDigest(eref->HASH, hashLen);
 		
-		EVP_DigestUpdate(mdctx,eref->HASH,SHA256_DIGEST_LENGTH);
+		EVP_DigestUpdate(mdctx,eref->HASH,hashLen);
 		EVP_DigestFinal_ex(mdctx, pcrs[eref->PCR_INDEX], &output_length);
 		 
 		printf("digest: ");
-		displayDigest(pcrs[eref->PCR_INDEX], SHA256_DIGEST_LENGTH);
+		displayDigest(pcrs[eref->PCR_INDEX], hashLen);
 		printf("\n\n");
+		
 		EVP_MD_CTX_free(mdctx); // probably can be optimised away 
 	}
 }
