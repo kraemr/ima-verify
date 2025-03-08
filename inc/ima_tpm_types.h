@@ -30,15 +30,20 @@
 
 typedef struct IMA_ENTRY {
 	uint32_t PCR_INDEX;
-	uint8_t* PCR_VALUE;
+	uint8_t* TEMPLATE_HASH;
+	
 	uint32_t TEMPLATE_LEN;
 	uint32_t TEMPLATE_NAME_LEN;
 	char* TEMPLATE_NAME;
+
+	uint8_t* TEMPLATE_DATA;
 	uint32_t TEMPLATE_DATA_LEN;
 
 	char* TEMPLATE_FILENAME;
 	uint32_t TEMPLATE_FILENAME_LEN;
+	
 	uint8_t* HASH;
+	uint16_t HASH_ALGO;
 	uint8_t HASH_LEN;
 }IMA_ENTRY;
 
