@@ -1,6 +1,6 @@
-# TODO
 
-Create TestCases
-Handle Cases where eventlog is Sha1 but Sha256 is specified and vice versa
-Integrate boot_aggregate calculation
-Fix boot_aggregate by correctly reading ALL possible bios log formats/events (Sadly pretty complex and poorly documented ...)
+
+This was made to be able to verify a given IMA-Event Log with a PCR-Aggregate Digest.
+The Code was heavily inspired by linux-test-project.
+
+I mostly made this as a part of my bachelor thesis project involving remote attestation.
