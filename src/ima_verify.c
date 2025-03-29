@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <openssl/evp.h>
 
-#pragma region IMA_LOGP_ARSING
+#pragma region IMA_LOG_PARSING
 uint32_t parseIMALogCount(char* path,uint16_t hashType){
 	uint8_t buffer[16384] = {0};
 	FILE* fp = fopen(path,"rb");
@@ -17,20 +17,20 @@ uint32_t parseIMALogCount(char* path,uint16_t hashType){
 		printf("File Not Found or Missing Privileges\n");
 		return 0;
 	}
+
 	uint32_t ima_i=1; 
-	IMA_ENTRY* temp = malloc(sizeof(IMA_ENTRY));
-	uint16_t hashLen = getTpmHashLength(hashType);
-	//printf("sanity check hashLen parseIMALogCount: %u\n",hashLen);
-	uint64_t size = getFileSize(fp);	
-	int n = 1;
-	uint32_t bytesToBeRead=1024;
+	IMA_ENTRY* temp = (IMA_ENTRY*)malloc(sizeof(IMA_ENTRY));
+	uint16_t hashLen = (uint32_t)getTpmHashLength(hashType);
+	uint64_t size = (uint64_t)getFileSize(fp);	
+	int32_t n = 1;
+	uint32_t bytesToBeRead= 1024;
+
 	while(n) {
 		size_t currentPos = ftell(fp);
 		if(size - currentPos < 1024){
 			bytesToBeRead = size - currentPos;
 		}
 		n = fread(buffer,bytesToBeRead,1,fp);
-		//printf("%d %lu %lu %u\n",bytesToBeRead,size,currentPos,ima_i);
 		currentPos = ftell(fp);
 
 		temp->TEMPLATE_DATA_LEN = 0;
@@ -47,18 +47,20 @@ uint32_t parseIMALogCount(char* path,uint16_t hashType){
 		
 		fseek(fp,currentPos - bytesToBeRead + offset,SEEK_SET);
 		currentPos = ftell(fp);
-		printf("%d\n",ima_i);
+
 		if(currentPos == size){
 			return ima_i;
 		}
+
 		ima_i++;
 	}
+
 	free(temp);
 	fclose(fp);
 	return ima_i;
 }
 
-static uint32_t parseIMALog(char* path,uint16_t hashType, IMA_ENTRY* imaEntryList){
+uint32_t parseIMALog(char* path,uint16_t hashType, IMA_ENTRY* imaEntryList){
 	uint8_t buffer[16384] = {0};
 	FILE* fp = fopen(path,"rb");
 	if(fp == NULL){
@@ -170,9 +172,40 @@ static void rebuildIMACache(IMA_ENTRY* imaEntries, int32_t count, uint8_t pcrs[2
 	displayDigest(pcrs[10],hashLen);
 }
 
+/*
+	For now just check that the quote digest matches the digest we generate
+	Check signature aswell later
 
-static void addIMAEvents(
-		IMA_ENTRY* newEntries,
+	returns 1 if quoteDigest matches pcr
+	returns 0 if not
+
+	Both need to be of same hash type
+*/
+int32_t attest(uint8_t* pcr,uint8_t* quoteDigest,uint32_t hashLen) {
+	// a result of 0 indicates that all bytes match exactly
+	if(memcmp(pcr,quoteDigest,hashLen)==0) {
+		return 1;
+	}
+	else{
+		return 0;
+	}
+
+}
+
+uint8_t compareQuotes(uint8_t* q1, uint16_t digest1Len,uint8_t* q2,uint16_t digest2Len) {
+	uint8_t anyQuoteNull = q1 == NULL  || q2 == NULL;
+	uint8_t digestDiffSize = digest1Len != digest2Len;
+	if(anyQuoteNull ||  digestDiffSize){
+		return 0;
+	}
+	int32_t result = memcmp(q1, q2,digest1Len);
+	return result == 0 ? 1 : 0;  // if memcmp returns 0 true else false
+} 
+
+
+uint8_t verifyNewQuote(
+		uint8_t* quoteDigest, // quote to match
+		IMA_ENTRY* newEntries, // 
 		uint8_t pcrs[24][EVP_MAX_MD_SIZE],
 		IMA_ENTRY** entriesCache, 
 		uint32_t eventsCount,
@@ -190,7 +223,6 @@ static void addIMAEvents(
 		(*entriesCache) = realloc((*entriesCache),(eventsCount+1000) * sizeof(struct IMA_ENTRY));
 		(*size) = eventsCount;
 	}
-		displayDigest(pcrs[10],hashLen);
 
 	for(uint32_t i = 0; i < newEntriesCount; i++){
 		IMA_ENTRY* entry = &newEntries[i];
@@ -198,12 +230,15 @@ static void addIMAEvents(
 		EVP_DigestUpdate(mdctx,pcrs[entry->PCR_INDEX] ,hashLen);
 		EVP_DigestUpdate(mdctx,entry->TEMPLATE_HASH,hashLen);
 		EVP_DigestFinal_ex(mdctx, pcrs[entry->PCR_INDEX], &output_length);
-		EVP_MD_CTX_free(mdctx); // probably can be optimised away
+		EVP_MD_CTX_free(mdctx); 
 	}
 		printf("PCR_AGGREGATE: ");
 		displayDigest(pcrs[10],hashLen);
+		return compareQuotes(quoteDigest,hashLen,pcrs[10],hashLen);
 }
 
+
+#ifdef IMA_VERIFY_STANDALONE
 
 // We dont now the number of entries beforehand
 // One approach: Read entire File and check for Entry count
@@ -243,14 +278,15 @@ int main(int argc,char* argv[]) {
 	memcpy(newEntries,&imaEntries[count-4],4 * sizeof(struct IMA_ENTRY) ); // simulate us adding 4 new entries
 	rebuildIMACache(imaEntries,count-4,pcrs);
 
-	printf("Cache Rebuilt\n");
-	printf("Incrementally add now %u %u\n",cacheElementCount,count);
+//	printf("Cache Rebuilt\n");
+//	printf("Incrementally add now %u %u\n",cacheElementCount,count);
 	cacheElementCount += 4;
 
 	// simulate incrementally adding new Events to the pcrs and storing them in the cache 
-	addIMAEvents(newEntries,pcrs,&imaEntries,cacheElementCount,4,&cacheSize);
+	verifyNewQuote(NULL,newEntries,pcrs,&imaEntries,cacheElementCount,4,&cacheSize);
 	
 	freeIMAEntries(imaEntries,count);
 	free(imaEntries);	
 	free(newEntries);
 }
+#endif
