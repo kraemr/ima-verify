@@ -1,26 +1,21 @@
-# Make the IMA LTP testsuite as standalone programs
-#
 CC = gcc
-CFLAGS = -g -O2 -DDEBUG 
+CFLAGS = -g -O2 -DDEBUG -fPIC
 LIBS = -lcrypto -lssl
-DESTDIR = /usr/local/share/
+SRCS = src/ima_verify.c src/ima_utils.c src/tpm_utils.c
+OBJS = build/ima_verify.o build/ima_utils.o build/tpm_utils.o
+TARGET = build/libima.so
 
-SRCS = boot_aggregate.c 
-#ima_measure.c ima_mmap.c 
+all: $(TARGET)
+$(TARGET): $(OBJS)
+	$(CC) -shared -o $(TARGET) $(OBJS) $(LIBS)
 
-#MEASURE_OBJECTS = ima_measure.c pkeys.c ima_sigv2.c rsa_oid.c
-PROGS = $(patsubst %.c,%,$(SRCS))
+build/%.o: src/%.c | build
+	$(CC) $(CFLAGS) -c $< -o $@
 
-all: $(PROGS) ima_measure
-
-%: %.c
-	$(CC) $(CFLAGS)  -o $@ $< $(LIBS) ltp-tst-replacement.c 
-
-ima_measure: $(MEASURE_OBJECTS)
-	$(CC) $(CFLAGS) -o $@ $(MEASURE_OBJECTS) $(LIBS) ltp-tst-replacement.c
-	
-install: 
-	cp -t $(DESTDIR) $(PROGS)
+# Create the build directory only when needed
+build:
+	mkdir -p build
 
 clean:
-	rm $(PROGS)
+	rm -f $(OBJS) $(TARGET) 
+	rmdir build
