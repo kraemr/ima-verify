@@ -107,10 +107,10 @@ uint32_t parseIMALog(char* path,uint16_t hashType, IMA_ENTRY* imaEntryList){
 		memcpy(temp->TEMPLATE_DATA,&buffer[offset+4],temp->TEMPLATE_DATA_LEN); // TODO: make it non static and parse the algoname
 		offset += temp->TEMPLATE_DATA_LEN;
 
-		displayDigest(temp->TEMPLATE_DATA, temp->TEMPLATE_DATA_LEN);
+		//displayDigest(temp->TEMPLATE_DATA, temp->TEMPLATE_DATA_LEN);
 		temp->HASH_ALGO = getHashAlgoFromTemplate(temp);
 		temp->HASH = getHashFromTemplateData(temp);
-		printf("%d\n",ima_i);
+	//	printf("%d\n",ima_i);
 	//	printf("id: %d Algo: %d %d ",ima_i,temp->HASH_ALGO,getTpmHashLength(temp->HASH_ALGO));
 		//displayDigest(temp->TEMPLATE_HASH,getTpmHashLength(temp->HASH_ALGO));
 		//displayDigest(temp->TEMPLATE_HASH, SHA256_DIGEST_LENGTH);
@@ -168,8 +168,8 @@ static void rebuildIMACache(IMA_ENTRY* imaEntries, int32_t count, uint8_t pcrs[2
 		EVP_DigestFinal_ex(mdctx, pcrs[eref->PCR_INDEX], &output_length);
 		EVP_MD_CTX_free(mdctx); // probably can be optimised away 
 	}
-	printf("PCR_AGGREGATE: ");
-	displayDigest(pcrs[10],hashLen);
+	//printf("PCR_AGGREGATE: ");
+	//displayDigest(pcrs[10],hashLen);
 }
 
 /*
@@ -219,8 +219,8 @@ uint8_t verifyNewQuote(
 	uint32_t hashLen = getTpmHashLength(hashAlgo);
 
 	if (eventsCount > (*size) ) {
-		printf("Realloc\n");
-		(*entriesCache) = realloc((*entriesCache),(eventsCount+1000) * sizeof(struct IMA_ENTRY));
+	//	printf("Realloc\n");
+		(*entriesCache) = (IMA_ENTRY*)realloc((*entriesCache),(eventsCount+1000) * sizeof(struct IMA_ENTRY));
 		(*size) = eventsCount;
 	}
 
@@ -232,8 +232,8 @@ uint8_t verifyNewQuote(
 		EVP_DigestFinal_ex(mdctx, pcrs[entry->PCR_INDEX], &output_length);
 		EVP_MD_CTX_free(mdctx); 
 	}
-		printf("PCR_AGGREGATE: ");
-		displayDigest(pcrs[10],hashLen);
+		//printf("PCR_AGGREGATE: ");
+		//displayDigest(pcrs[10],hashLen);
 		return compareQuotes(quoteDigest,hashLen,pcrs[10],hashLen);
 }
 

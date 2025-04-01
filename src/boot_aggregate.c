@@ -54,13 +54,13 @@ static void readTpm2BiosLog(FILE * fp,TCG_PCR_EVENT2** eventListRef,uint32_t* ev
 	fseek(fp,0,SEEK_SET);
 	int32_t ret = checkSpecId(fp,&event);
 	uint32_t evListSize = sizeof(TCG_PCR_EVENT2) * 200;
-	(*eventListRef) = malloc(evListSize); 
+	(*eventListRef) = (TCG_PCR_EVENT2 *)malloc(evListSize); 
 	TCG_PCR_EVENT2* eventList = (*eventListRef);
 
 	while(!feof(fp)){
 		if((*eventCount) >= evListSize){
 			evListSize = evListSize*2;
-			eventList = realloc(eventList,evListSize);
+			eventList = (TCG_PCR_EVENT2* )realloc(eventList,evListSize);
 			#ifdef DEBUG
 				printf("needed to realloc %u bytes",evListSize);
 			#endif
@@ -81,7 +81,7 @@ static void readTpm2BiosLog(FILE * fp,TCG_PCR_EVENT2** eventListRef,uint32_t* ev
 		}
 
 		fread(&e->eventSize,4,1,fp);
-		e->eventData = malloc(e->eventSize);
+		e->eventData = (uint8_t*)malloc(e->eventSize);
 		fread(e->eventData,e->eventSize,1,fp);	
 		#ifdef DEBUG
 			printf("pcr: %d \neventType: %d\ncount: %d\n",e->pcrIndex,e->eventType,e->digests.count);
