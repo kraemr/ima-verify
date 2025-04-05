@@ -87,6 +87,9 @@ uint32_t parseIMALog(char* path,uint16_t hashType, IMA_ENTRY* imaEntryList){
 		}
 		n = fread(buffer,bytesToBeRead,1,fp);
 		currentPos = ftell(fp);
+
+		temp->EVENT_INDEX = ima_i;
+
 		size_t offset = 0;
 		temp->PCR_INDEX = castByteBufUint32(&buffer[offset]);
 		offset += 4;
@@ -149,11 +152,7 @@ void tpmEmulatedExtend(uint8_t* hash1,uint8_t* hash2,uint16_t hashAlgoId,uint8_t
 	displayDigest(out,outputLen);
 }
 
-
-/* 
-	There is actually a file with measurements count, which can be used 
-*/
-static void rebuildIMACache(IMA_ENTRY* imaEntries, int32_t count, uint8_t pcrs[24][EVP_MAX_MD_SIZE] ) {
+void rebuildIMACache(IMA_ENTRY* imaEntries, int32_t count, uint8_t pcrs[30][EVP_MAX_MD_SIZE] ) {
 	uint8_t zeroes[EVP_MAX_MD_SIZE] = {0};
 	uint32_t output_length = 0;
 	uint8_t out[EVP_MAX_MD_SIZE];
@@ -167,9 +166,14 @@ static void rebuildIMACache(IMA_ENTRY* imaEntries, int32_t count, uint8_t pcrs[2
 		EVP_DigestUpdate(mdctx,eref->TEMPLATE_HASH,hashLen);
 		EVP_DigestFinal_ex(mdctx, pcrs[eref->PCR_INDEX], &output_length);
 		EVP_MD_CTX_free(mdctx); // probably can be optimised away 
+	
+		//displayDigest(pcrs[10],hashLen);
+
+		//displayDigest(eref->TEMPLATE_HASH,hashLen);
+	
 	}
 	//printf("PCR_AGGREGATE: ");
-	//displayDigest(pcrs[10],hashLen);
+//	displayDigest(pcrs[10],hashLen);
 }
 
 /*
@@ -249,8 +253,7 @@ int main(int argc,char* argv[]) {
 	const char* hashFlag = argv[3];
 	int32_t hashFlagLen = strlen(hashFlag); 
 	uint16_t hashType = 0;
-	uint8_t pcrs[24][EVP_MAX_MD_SIZE];
-	
+	uint8_t pcrs[30][EVP_MAX_MD_SIZE];
 	uint32_t cacheElementCount = 0; // the current amount of elements inseide of the cache 
 	uint32_t cacheSize = 0; // The Allocated size of the cache 
 
@@ -268,25 +271,33 @@ int main(int argc,char* argv[]) {
 	uint32_t count = parseIMALogCount(path,hashType);
 	printf("IMA ENTRIES COUNT: %u\n",count);
 	IMA_ENTRY* imaEntries = (IMA_ENTRY*)malloc((count) * sizeof(struct IMA_ENTRY));
-	IMA_ENTRY* newEntries =  (IMA_ENTRY*)malloc(4 * sizeof(struct IMA_ENTRY));
+
+    
+
+	//IMA_ENTRY* newEntries =  (IMA_ENTRY*)malloc(4 * sizeof(struct IMA_ENTRY));
 	uint32_t len = parseIMALog(path,hashType,imaEntries);
 	printf("len %d count %d\n",len,count);
-	
-	cacheSize = count-4;
+	for(int i = 0; i < count; i++){
+      //  displayDigest(imaEntries[i].TEMPLATE_HASH, SHA256_DIGEST_LENGTH);
+    }
+	//cacheSize = count-4;
 	cacheElementCount= cacheSize;
 
-	memcpy(newEntries,&imaEntries[count-4],4 * sizeof(struct IMA_ENTRY) ); // simulate us adding 4 new entries
-	rebuildIMACache(imaEntries,count-4,pcrs);
+//	memcpy(newEntries,&imaEntries[count],4 * sizeof(struct IMA_ENTRY) ); // simulate us adding 4 new entries
+	
+	rebuildIMACache(imaEntries,count,pcrs);
+	printf("PCR \n");
+	displayDigest(pcrs[10], SHA256_DIGEST_LENGTH);
 
 //	printf("Cache Rebuilt\n");
 //	printf("Incrementally add now %u %u\n",cacheElementCount,count);
-	cacheElementCount += 4;
+	//cacheElementCount += 4;
 
 	// simulate incrementally adding new Events to the pcrs and storing them in the cache 
-	verifyNewQuote(NULL,newEntries,pcrs,&imaEntries,cacheElementCount,4,&cacheSize);
+//	verifyNewQuote(NULL,newEntries,pcrs,&imaEntries,cacheElementCount,4,&cacheSize);
 	
 	freeIMAEntries(imaEntries,count);
 	free(imaEntries);	
-	free(newEntries);
+//	free(newEntries);
 }
 #endif

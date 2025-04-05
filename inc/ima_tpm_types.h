@@ -28,6 +28,7 @@
 
 
 typedef struct IMA_ENTRY {
+	uint32_t EVENT_INDEX; // 
 	uint32_t PCR_INDEX;
 	uint8_t* TEMPLATE_HASH;
 	
