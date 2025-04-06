@@ -60,6 +60,69 @@ uint32_t parseIMALogCount(char* path,uint16_t hashType){
 	return ima_i;
 }
 
+#define BUFFERSIZE 16384
+// parseIMALogSeqeuential
+// resumes at a given event index, and loads everything after that into imaEntryList
+uint32_t parseIMALogSeq(FILE * fp,uint16_t hashType, IMA_ENTRY* imaEntryList) {
+	uint8_t buffer[BUFFERSIZE] = {0};
+	IMA_ENTRY* temp = NULL;
+	int ima_i=0; 
+
+	printf("Sequential Parse \n");
+	
+	if(feof(fp)) return 0; // we are at the end already, meaning no new data
+	
+	uint16_t hashLen = getTpmHashLength(hashType);
+	uint32_t bytesToBeRead=BUFFERSIZE;
+	uint64_t size = getFileSize(fp);
+	int n = 0;
+	while(feof(fp) == 0) {
+		size_t currentPos = ftell(fp);
+		if(size - currentPos < BUFFERSIZE){
+			bytesToBeRead = size - currentPos;
+		}
+		temp = &imaEntryList[ima_i];
+		if(temp == NULL){ // this should NEVER Be null
+			abort();
+		}
+		n = fread(buffer,bytesToBeRead,1,fp);
+		currentPos = ftell(fp);
+
+		temp->EVENT_INDEX = ima_i;
+
+		size_t offset = 0;
+		temp->PCR_INDEX = castByteBufUint32(&buffer[offset]);
+		offset += 4;
+
+		temp->TEMPLATE_HASH = (uint8_t*)malloc(hashLen * sizeof(uint8_t));
+		memcpy(temp->TEMPLATE_HASH,&buffer[offset],hashLen);
+		offset += hashLen;
+		
+		temp->TEMPLATE_NAME_LEN = castByteBufUint32((uint8_t*)&buffer[offset]);
+		offset += 4;
+		temp->TEMPLATE_NAME = (char*)malloc(temp->TEMPLATE_NAME_LEN * sizeof(char) );
+		memcpy(temp->TEMPLATE_NAME,&buffer[offset],temp->TEMPLATE_NAME_LEN);		
+		offset += temp->TEMPLATE_NAME_LEN;
+
+		temp->TEMPLATE_DATA_LEN = castByteBufUint32((uint8_t*)&buffer[offset]);
+		offset += 4;
+		temp->TEMPLATE_DATA = (uint8_t*)malloc(temp->TEMPLATE_DATA_LEN);
+		memcpy(temp->TEMPLATE_DATA,&buffer[offset+4],temp->TEMPLATE_DATA_LEN); // TODO: make it non static and parse the algoname
+		offset += temp->TEMPLATE_DATA_LEN;
+
+		temp->HASH_ALGO = getHashAlgoFromTemplate(temp);
+		temp->HASH = getHashFromTemplateData(temp);
+	
+		fseek(fp,currentPos - bytesToBeRead + offset,SEEK_SET);
+		currentPos = ftell(fp);
+		if(currentPos == size){
+			return ima_i;
+		}
+		ima_i++;
+	}
+	return ima_i;
+}
+
 uint32_t parseIMALog(char* path,uint16_t hashType, IMA_ENTRY* imaEntryList){
 	uint8_t buffer[16384] = {0};
 	FILE* fp = fopen(path,"rb");
@@ -110,23 +173,9 @@ uint32_t parseIMALog(char* path,uint16_t hashType, IMA_ENTRY* imaEntryList){
 		memcpy(temp->TEMPLATE_DATA,&buffer[offset+4],temp->TEMPLATE_DATA_LEN); // TODO: make it non static and parse the algoname
 		offset += temp->TEMPLATE_DATA_LEN;
 
-		//displayDigest(temp->TEMPLATE_DATA, temp->TEMPLATE_DATA_LEN);
 		temp->HASH_ALGO = getHashAlgoFromTemplate(temp);
 		temp->HASH = getHashFromTemplateData(temp);
-	//	printf("%d\n",ima_i);
-	//	printf("id: %d Algo: %d %d ",ima_i,temp->HASH_ALGO,getTpmHashLength(temp->HASH_ALGO));
-		//displayDigest(temp->TEMPLATE_HASH,getTpmHashLength(temp->HASH_ALGO));
-		//displayDigest(temp->TEMPLATE_HASH, SHA256_DIGEST_LENGTH);
-		
-	//	temp->TEMPLATE_FILENAME_LEN = castByteBufUint32((uint8_t*)&buffer[offset]);
-	//	offset += 4;
-	//	temp->TEMPLATE_FILENAME = (char*)malloc(temp->TEMPLATE_FILENAME_LEN * sizeof(char) );
-	//	memcpy(temp->TEMPLATE_FILENAME,&buffer[offset],temp->TEMPLATE_FILENAME_LEN);
-	//	offset += temp->TEMPLATE_FILENAME_LEN;
-	/*	if(buffer[offset] != 0 && buffer[offset+1] != 0 && buffer[offset+2] != 0 && buffer[offset+3] != 0 ){
-		//	printf("Padding missing???\n");
-		}*/
-		//offset  += 4; // 4 byte zero padding
+	
 		fseek(fp,currentPos - bytesToBeRead + offset,SEEK_SET);
 		currentPos = ftell(fp);
 		if(currentPos == size){
@@ -270,18 +319,19 @@ int main(int argc,char* argv[]) {
 
 	uint32_t count = parseIMALogCount(path,hashType);
 	printf("IMA ENTRIES COUNT: %u\n",count);
+	
 	IMA_ENTRY* imaEntries = (IMA_ENTRY*)malloc((count) * sizeof(struct IMA_ENTRY));
+	//uint32_t len = parseIMALog(path,hashType,imaEntries);
+	FILE * fp = fopen(path,"rb");
+	parseIMALogSeq(fp,hashType,imaEntries);
+	fclose(fp);
 
-    
-
-	//IMA_ENTRY* newEntries =  (IMA_ENTRY*)malloc(4 * sizeof(struct IMA_ENTRY));
-	uint32_t len = parseIMALog(path,hashType,imaEntries);
-	printf("len %d count %d\n",len,count);
-	for(int i = 0; i < count; i++){
+	//printf("len %d count %d\n",len,count);
+	//for(int i = 0; i < count; i++){
       //  displayDigest(imaEntries[i].TEMPLATE_HASH, SHA256_DIGEST_LENGTH);
-    }
+    //}
 	//cacheSize = count-4;
-	cacheElementCount= cacheSize;
+	//cacheElementCount= cacheSize;
 
 //	memcpy(newEntries,&imaEntries[count],4 * sizeof(struct IMA_ENTRY) ); // simulate us adding 4 new entries
 	
