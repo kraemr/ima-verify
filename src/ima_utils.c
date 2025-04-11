@@ -7,9 +7,10 @@ const char* MEASURENT_COUNT_PATH = "/sys/kernel/security/integrity/ima/measureme
 const char* VIOLATIONS_PATH = "/sys/kernel/security/integrity/ima/violations";
 
 uint64_t getFileSize(FILE * fp){
+	uint64_t originalPosition = ftell(fp);
 	fseek(fp,0,SEEK_END);
 	uint64_t t = ftell(fp);
-	fseek(fp,0,SEEK_SET);
+	fseek(fp,originalPosition,SEEK_SET);
 	return t;
 }
 

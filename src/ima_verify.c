@@ -66,16 +66,13 @@ uint32_t parseIMALogCount(char* path,uint16_t hashType){
 uint32_t parseIMALogSeq(FILE * fp,uint16_t hashType, IMA_ENTRY* imaEntryList) {
 	uint8_t buffer[BUFFERSIZE] = {0};
 	IMA_ENTRY* temp = NULL;
-	int ima_i=0; 
-
-	printf("Sequential Parse \n");
-	
+	int ima_i=0; 	
+	uint64_t size = getFileSize(fp);
 	if(feof(fp)) return 0; // we are at the end already, meaning no new data
-	
 	uint16_t hashLen = getTpmHashLength(hashType);
 	uint32_t bytesToBeRead=BUFFERSIZE;
-	uint64_t size = getFileSize(fp);
 	int n = 0;
+
 	while(feof(fp) == 0) {
 		size_t currentPos = ftell(fp);
 		if(size - currentPos < BUFFERSIZE){
@@ -323,7 +320,7 @@ int main(int argc,char* argv[]) {
 	IMA_ENTRY* imaEntries = (IMA_ENTRY*)malloc((count) * sizeof(struct IMA_ENTRY));
 	//uint32_t len = parseIMALog(path,hashType,imaEntries);
 	FILE * fp = fopen(path,"rb");
-	parseIMALogSeq(fp,hashType,imaEntries);
+	int c = parseIMALogSeq(fp,hashType,imaEntries);
 	fclose(fp);
 
 	//printf("len %d count %d\n",len,count);
